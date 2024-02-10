@@ -1,0 +1,11 @@
+<players root="gfx/characters/costumes/" portraitroot="gfx/ui/stage/" nameimageroot="gfx/ui/boss/">
+    <player name="Gabriel"
+        skin="character_017_theforgotten.png"
+        nameimage="playername_gabriel.png"
+        hp="1"
+        armor="0"
+        portrait="playerportrait_gabriel.png"
+        skinColor="-1"
+        birthright="Spin bigger"
+    />
+</players>
