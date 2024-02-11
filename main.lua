@@ -1,10 +1,12 @@
-local MyCharacterMod = RegisterMod("Gabriel Character Mod", 1)
+local mod = RegisterMod("Accurate Forgotten Character Mod", 1)
 
-local gabrielType = Isaac.GetPlayerTypeByName("Gabriel", false) -- Exactly as in the xml. The second argument is if you want the Tainted variant.
+local Consts = require("consts")
+
+local gabrielType = Isaac.GetPlayerTypeByName("Accurate Forgotten", false) -- Exactly as in the xml. The second argument is if you want the Tainted variant.
 -- local hairCostume = Isaac.GetCostumeIdByPath("gfx/characters/gabriel_hair.anm2") -- Exact path, with the "resources" folder as the root
 -- local stolesCostume = Isaac.GetCostumeIdByPath("gfx/characters/gabriel_stoles.anm2") -- Exact path, with the "resources" folder as the root
 
-function MyCharacterMod:GiveCostumesOnInit(player)
+function mod:GiveCostumesOnInit(player)
     if player:GetPlayerType() ~= gabrielType then
         return -- End the function early. The below code doesn't run, as long as the player isn't Gabriel.
     end
@@ -13,16 +15,13 @@ function MyCharacterMod:GiveCostumesOnInit(player)
     -- player:AddNullCostume(stolesCostume)
 end
 
-MyCharacterMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, MyCharacterMod.GiveCostumesOnInit)
 
-local spinItem = Isaac.GetItemIdByName("Spin")
-
-
+--------------------------------------------------------------------------------------------------
+--------------------------------------- STARTING STATS HANDLE ------------------------------------
 --------------------------------------------------------------------------------------------------
 
 
 local game = Game() -- We only need to get the game object once. It's good forever!
-local DAMAGE_REDUCTION = 0.6
 local DAMAGE_MULTIPLIER = 2
 local DAMAGE_ADD = 3
 local FIREDELAY_MULTIPLIER = 2
@@ -30,7 +29,7 @@ local fireDelayMultiplierSet = false
 
 local health = 206
 
-function MyCharacterMod:HandleStartingStats(player, flag)
+function mod:HandleStartingStats(player, flag)
     if player:GetPlayerType() ~= gabrielType then
         return -- End the function early. The below code doesn't run, as long as the player isn't Gabriel.
     end
@@ -45,9 +44,8 @@ function MyCharacterMod:HandleStartingStats(player, flag)
     end
 end
 
-MyCharacterMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, MyCharacterMod.HandleStartingStats)
 
-function MyCharacterMod:HandleHolyWaterTrail(player)
+function mod:HandleHolyWaterTrail(player)
     if player:GetPlayerType() ~= gabrielType then
         return -- End the function early. The below code doesn't run, as long as the player isn't Gabriel.
     end
@@ -61,75 +59,106 @@ function MyCharacterMod:HandleHolyWaterTrail(player)
     end
 end
 
-function MyCharacterMod:charging(entity, amount, damageflag, source, countdownframes)
+function mod:charging(entity, amount, damageflag, source, countdownframes)
 	if source.Type == EntityType.ENTITY_TEAR and entity:IsEnemy() then
         print(source)
 	end
 end
-	
-MyCharacterMod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG,MyCharacterMod.charging)
-MyCharacterMod:AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, MyCharacterMod.HandleHolyWaterTrail)
 
----------------------------------------------------
+-- Extra-safe player iteration. Might not be necessary but shouldn't have much of an impact on performance.
+function mod.GetPlayers()
+	local players = {}
+	for i=0, game:GetNumPlayers()-1 do
+		local player = game:GetPlayer(i)
+		if player and player:Exists() then
+			players[i] = player
+		end
+	end
+	return players
+end
+
+function mod:PostPlayerInit(player)
+    fireDelayMultiplierSet = false
+	health = 206
+end
+	
+
+
+--------------------------------------------------------------------------------------------------
+-------------------------------------- SPIN ITEM IMPLEMENTATION ----------------------------------
+--------------------------------------------------------------------------------------------------
 
 local spin = Isaac.GetItemIdByName("Spin")
+local spinItem = Isaac.GetItemIdByName("Spin")
+local spinEntity = Isaac.GetEntityTypeByName("Spin")
 
-function MyCharacterMod:SpinUse(item)
-    local roomEntities = Isaac.GetRoomEntities()
-    local room = Game():GetRoom()
-    local pos
-    local sprite
+local spinInstance
+local spinMode = 0
 
-    
+function mod:SpinUse(item)
+    local player = Isaac.GetPlayer(0)
+    local pos = player.Position
+    pos.Y = pos.Y - 13
+
+    spinInstance = Isaac.Spawn(spinEntity, 0, 0, pos, Vector(0,0), player)
+    spinMode = 1
+
+    SFXManager():Play(Isaac.GetSoundIdByName("Spin"), 1.25, 0, false, 1.0)
 
     return {
         Discharge = true,
         Remove = false,
-        ShowAnim = true
+        ShowAnim = false
     }
 end
 
-local spinMode = 0
-function spinning()
+local spinCounter = 0
+local frameCounter = 0
+
+function runningSpinItem()
     local player = Isaac.GetPlayer(0)
-    local sprite
+    local sprite = player:GetSprite()
 
-    if spearMode == 1 then -- la lance est au sol
+    if spinMode == 1 then
+        
+        local pos = player.Position
+        pos.Y = pos.Y - 13
+        spinInstance.Position = pos
+        --spinInstance.Position.Y = spinInstance.Position.Y+5
+        spinInstance.DepthOffset = 100
+        sprite = spinInstance:GetSprite()
+        spinInstance:ToNPC().Scale = player.SpriteScale.Y
+        spinInstance.SpriteScale = spinInstance.SpriteScale * 5
 
-        -- on regarde si le joueur est assez pr�s
-        if player.Position:Distance(spear.Position) < 25 then
-            spearMode = 2 -- lance l'animation
-            player:PlayExtraAnimation("Pickup")
-            spear.Position = player.Position
-            spear.Position.Y = spear.Position.Y+5
-            spear.DepthOffset = 100
-            sprite = spear:GetSprite()
-            spear:ToNPC().Scale = player.SpriteScale.Y
-            sprite:Play("Attack", true)
-        end
-        -- on regarde si la lance doit etre deplacee
-        if (spearResetTime <= 0) or (IsAnybodyHere() == false) then -- (room:IsClear() == true) then
-            sprite = spear:GetSprite()
-            sprite:Play("Hide", true)
-            spearMode = 3
-        end
+        spinInstance:AddEntityFlags(EntityFlag.FLAG_NO_BLOOD_SPLASH)
+        spinInstance:ToNPC().CanShutDoors = false
+
+        sprite:Play("Spin", true)
+        spinMode = 2
     end
-    if spearMode == 2 then -- la lance est utilise
-        spear.Position = player.Position
-        sprite = spear:GetSprite()
-        -- teste degats
-        if (sprite:GetFrame() == 7) 
-        or (sprite:GetFrame() == 13)
-        or (sprite:GetFrame() == 19)
-        or (sprite:GetFrame() == 25)
-        or (sprite:GetFrame() == 31) then
-            AOEdamage(player.Position, 110 * player.SpriteScale.Y, player.Damage * 1.6)
+
+    if spinMode == 2 then
+        frameCounter = frameCounter + 1
+        sprite:Update()
+        
+        local pos = player.Position
+        pos.Y = pos.Y - 13
+        spinInstance.Position = pos
+        --spinInstance.Position.Y = spinInstance.Position.Y+5
+        spinInstance.DepthOffset = 100
+        spinInstance:ToNPC().Scale = player.SpriteScale.Y
+
+        if (frameCounter % 7 == 2)
+        then
+            spinCounter = spinCounter + 1
+            AOEdamage(player.Position, 90 * player.SpriteScale.Y, player.Damage / 1.5)
         end
 
-        if sprite:IsFinished("Attack") then
-            spear:Remove()
+        if spinCounter == 4 then
+            spinInstance:Die()
+            spinCounter = 0
+            frameCounter = 0
             spinMode = 0
-            spearResetTime = player.MaxFireDelay * 20
         end
     end
 end
@@ -146,48 +175,42 @@ function AOEdamage(loc, radius, degat)
 		or entities[i].Type == EntityType.ENTITY_FIREPLACE then
 			if dist < radius then
 				entities[i]:TakeDamage(degat,0,EntityRef(player),30)
+
+                local knockback = 40
+
+                local knockbackForce = entities[i].Position:__sub(player.Position):Resized(knockback)
+		        entities[i].Velocity = Lerp(entities[i].Velocity, knockbackForce, 0.75)
+
+                SFXManager():Play(Isaac.GetSoundIdByName("Enemy Spun"), 1.25, 0, false, 1.0)
 			end
 		end
 	end
 
 end
 
-MyCharacterMod:AddCallback(ModCallbacks.MC_USE_ITEM, MyCharacterMod.SpinUse, spin)
+function Lerp(first, second, percent)
+	return (first + (second - first)*percent)
+end
 
-
-
-
-function MyCharacterMod:GiveForgottenPocketActive(player)
+function mod:GiveForgottenPocketActive(player)
 	if player:GetPlayerType() == gabrielType and player:GetActiveItem(ActiveSlot.SLOT_POCKET) == 0 then
 		player:SetPocketActiveItem(spinItem)
 	end
 end
 
-function MyCharacterMod:ForgottenPocketActiveCheck()
-	for _, player in pairs(MyCharacterMod.GetPlayers()) do
-		MyCharacterMod:GiveForgottenPocketActive(player)
+function mod:ForgottenPocketActiveCheck()
+	for _, player in pairs(mod.GetPlayers()) do
+		mod:GiveForgottenPocketActive(player)
 	end
 end
 
--- Extra-safe player iteration. Might not be necessary but shouldn't have much of an impact on performance.
-function MyCharacterMod.GetPlayers()
-	local players = {}
-	for i=0, game:GetNumPlayers()-1 do
-		local player = game:GetPlayer(i)
-		if player and player:Exists() then
-			players[i] = player
-		end
-	end
-	return players
-end
 
-
-MyCharacterMod:AddCallback(ModCallbacks.MC_POST_NEW_LEVEL, MyCharacterMod.ForgottenPocketActiveCheck)
-MyCharacterMod:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, MyCharacterMod.ForgottenPocketActiveCheck)
-
+--------------------------------------------------------------------------------------------------
+------------------------------------ HEALTH HANDLING FUNCTIONS -----------------------------------
+--------------------------------------------------------------------------------------------------
 
 local takendamage = false
-function MyCharacterMod.ForgottenTakeDamage(teste,target,amount,flag,source,num)
+function mod.ForgottenTakeDamage(teste,target,amount,flag,source,num)
     local player = Isaac.GetPlayer(0)
 
     if target.Type == EntityType.ENTITY_PLAYER then
@@ -214,24 +237,52 @@ function MyCharacterMod.ForgottenTakeDamage(teste,target,amount,flag,source,num)
     end
 end
 
-function MyCharacterMod:PostPlayerInit(player)
-    fireDelayMultiplierSet = false
-	health = 206
-end
 
-function MyCharacterMod:displayinfo()
-    local Xoffset = 30
-    local Yoffset = 20
+
+function mod:displayinfo()
+    --local player = Isaac.GetPlayer(0)
+    --local position = Isaac.WorldToRenderPosition(player.Position)
+
+    local Xoffset, Yoffset = dynamicText(health)
+
+    --local Xoffset = position.X
+    --local Yoffset = position.Y
     Isaac.RenderText(health,Xoffset,Yoffset,1,1,1,1)
 end
 
-function MyCharacterMod:tick()
+function dynamicText(str)
+    local player_position = Isaac.WorldToRenderPosition(Isaac.GetPlayer(0).Position, 2)
+
+    local scroll_offset = Game():GetRoom():GetRenderScrollOffset()
+
+    local text_width_half = Isaac.GetTextWidth(str) / 2.0
+
+    local x = player_position.X + 0 + scroll_offset.X - text_width_half
+    local y = player_position.Y + 5 + scroll_offset.Y
+
+    return x, y
+end
+
+function renderText(str, positionProducer, r, g, b, a)
+    local x, y = positionProducer(str)
+
+    Isaac.RenderText(str, x, y, r, g, b, a)
+end
+
+function mod:tick()
     local player = Isaac.GetPlayer(0)
 
     if player:GetPlayerType() ~= gabrielType then
         return
     end
 
+    updateTearsSprite()
+    handleHealthPickups(player)
+    runningSpinItem()
+
+end
+
+function updateTearsSprite()
     local ents = Isaac.GetRoomEntities()
     for i=1,#ents do
         if ents[i].Type == EntityType.ENTITY_TEAR and ents[i].Variant ~= TearVariant.PUPULA then
@@ -240,10 +291,11 @@ function MyCharacterMod:tick()
             local spr = ents[i]:GetSprite()
             spr:ReplaceSpritesheet(0,"gfx/tears_bone.png")
             spr:LoadGraphics()
-            tears[ents[i].Index] = ents[i]
         end
     end
+end
 
+function handleHealthPickups(player)
     local entities = Isaac.FindByType(5, 10, -1)
     local pickupradius = 50
 
@@ -253,57 +305,58 @@ function MyCharacterMod:tick()
             if entity.Variant == 10 and entity.SubType < 20 then
                 if entity.Position.X < player.Position.X + pickupradius and entity.Position.X > player.Position.X - pickupradius and entity.Position.Y < player.Position.Y + pickupradius and entity.Position.Y > player.Position.Y - pickupradius then
                     if entity.SubType == 1 or entity.SubType == 9 then -- full red
-                        addHealth(30)
+                        addHealth(Consts.RED_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 2 then -- half heart
-                        addHealth(15)
+                        addHealth(Consts.HALF_RED_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 3 then -- soul heart
-                        addHealth(40)
+                        addHealth(Consts.SOUL_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 4 then -- eternal heart
-                        addHealth(60)
+                        addHealth(Consts.ETERNAL_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 5 then -- double red
-                        addHealth(60)
+                        addHealth(Consts.DOUBLE_RED_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 6 then -- black heart
-                        addHealth(45)
+                        addHealth(Consts.BLACK_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 7 then -- gold heart
-                        addHealth(20)
+                        addHealth(Consts.GOLD_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 8 then -- half soul heart
-                        addHealth(40)
+                        addHealth(Consts.HALF_SOUL_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 10 then -- blended heart
-                        addHealth(40)
+                        addHealth(Consts.BLENDED_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 11 then -- bone heart
-                        addHealth(60)
+                        addHealth(Consts.BONE_HEART_REGEN)
                         entity:Remove()
                     elseif entity.SubType == 12 then -- rotten heart
-                        addHealth(30)
+                        addHealth(Consts.ROTTEN_HEART_REGEN)
                         entity:Remove()
                     end
 
                     SFXManager():Play(SoundEffect.SOUND_BONE_HEART, 1.25, 0, false, 1.0)
                 end
-            end
-            if player:HasCollectible(53) then
-                if entity.SubType == 1 or entity.SubType == 2 or entity.SubType == 5 or entity.SubType == 9 or entity.SubType == 10 then
-                    local tempVel = entity.Velocity
-                    if entity.Position.X > player.Position.X then
-                        tempVel.X = -1.5
-                    else
-                        tempVel.X = 1.5
+
+                if player:HasCollectible(53) then
+                    if entity.SubType == 1 or entity.SubType == 2 or entity.SubType == 5 or entity.SubType == 9 or entity.SubType == 10 then
+                        local tempVel = entity.Velocity
+                        if entity.Position.X > player.Position.X then
+                            tempVel.X = -1.5
+                        else
+                            tempVel.X = 1.5
+                        end
+                        if entity.Position.Y > player.Position.Y then
+                            tempVel.Y = -1.5
+                        else
+                            tempVel.Y = 1.5
+                        end								
+                        entity.Velocity = tempVel
                     end
-                    if entity.Position.Y > player.Position.Y then
-                        tempVel.Y = -1.5
-                    else
-                        tempVel.Y = 1.5
-                    end								
-                    entity.Velocity = tempVel
                 end
             end
         end
@@ -344,19 +397,31 @@ function removeHealth(amount)
     health = tempHealth
 end
 
-function MyCharacterMod:tearColision(tear, collider, low)
+
+--------------------------------------------------------------------------------------------------
+------------------------------------- TEAR ACCURACY FUNCTIONS ------------------------------------
+--------------------------------------------------------------------------------------------------
+
+function mod:tearColision(tear, collider, low)
     addHealth(1)
 end
 
-function MyCharacterMod:tearInit(tear)
+function mod:tearInit(tear)
     removeHealth(1)
 end
 
 
-MyCharacterMod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, MyCharacterMod.ForgottenTakeDamage)
-MyCharacterMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, MyCharacterMod.PostPlayerInit)
-MyCharacterMod:AddCallback(ModCallbacks.MC_POST_RENDER, MyCharacterMod.displayinfo);
-MyCharacterMod:AddCallback(ModCallbacks.MC_POST_UPDATE, MyCharacterMod.tick);
-MyCharacterMod:AddCallback(ModCallbacks.MC_PRE_TEAR_COLLISION, MyCharacterMod.tearColision);
-MyCharacterMod:AddCallback(ModCallbacks.MC_POST_TEAR_INIT, MyCharacterMod.tearInit);
 
+mod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, mod.GiveCostumesOnInit)
+mod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, mod.HandleStartingStats)
+mod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, mod.ForgottenTakeDamage)
+mod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, mod.PostPlayerInit)
+mod:AddCallback(ModCallbacks.MC_POST_RENDER, mod.displayinfo);
+mod:AddCallback(ModCallbacks.MC_POST_UPDATE, mod.tick);
+mod:AddCallback(ModCallbacks.MC_PRE_TEAR_COLLISION, mod.tearColision);
+mod:AddCallback(ModCallbacks.MC_POST_TEAR_INIT, mod.tearInit);
+mod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG,mod.charging)
+mod:AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, mod.HandleHolyWaterTrail)
+mod:AddCallback(ModCallbacks.MC_USE_ITEM, mod.SpinUse, spin)
+mod:AddCallback(ModCallbacks.MC_POST_NEW_LEVEL, mod.ForgottenPocketActiveCheck)
+mod:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, mod.ForgottenPocketActiveCheck)

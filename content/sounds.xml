@@ -1,0 +1,8 @@
+<sounds root="sfx/">
+    <sound name="Spin">
+        <sample weight="1" path="spin.wav" />
+    </sound>
+    <sound name="Enemy Spun">
+        <sample weight="1" path="enemy-spun.wav"/>
+    </sound>
+</sounds>

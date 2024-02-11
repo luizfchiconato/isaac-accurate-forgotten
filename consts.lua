@@ -1,0 +1,22 @@
+local consts = {}
+
+consts.RED_HEART_REGEN = 30
+consts.HALF_RED_HEART_REGEN = consts.RED_HEART_REGEN / 2
+consts.DOUBLE_RED_HEART_REGEN = consts.RED_HEART_REGEN * 2
+
+consts.SOUL_HEART_REGEN = 40
+consts.HALF_SOUL_HEART_REGEN = consts.SOUL_HEART_REGEN / 2
+
+consts.BLENDED_HEART_REGEN = consts.SOUL_HEART_REGEN
+
+consts.BLACK_HEART_REGEN = 45
+
+consts.BONE_HEART_REGEN = 60
+
+consts.ETERNAL_HEART_REGEN = 60
+
+consts.ROTTEN_HEART_REGEN = 30
+
+consts.GOLD_HEART_REGEN = 20
+
+return consts

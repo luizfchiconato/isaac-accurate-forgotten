@@ -1,8 +1,8 @@
 <players root="gfx/characters/costumes/" portraitroot="gfx/ui/stage/" nameimageroot="gfx/ui/boss/">
-    <player name="Gabriel"
+    <player name="Accurate Forgotten"
         skin="character_017_theforgotten.png"
         nameimage="playername_gabriel.png"
-        hp="1"
+        hp="12"
         armor="0"
         portrait="playerportrait_gabriel.png"
         skinColor="-1"
